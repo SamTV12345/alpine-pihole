@@ -1,0 +1,559 @@
+#!/usr/bin/env bash
+
+# Pi-hole: A black hole for Internet advertisements
+# (c) 2017 Pi-hole, LLC (https://pi-hole.net)
+# Network-wide ad blocking via your own hardware.
+#
+# Controller for all pihole scripts and functions.
+#
+# This file is copyright under the latest version of the EUPL.
+# Please see LICENSE file for your rights under this license.
+
+readonly PI_HOLE_SCRIPT_DIR="/opt/pihole"
+
+# setupVars and PI_HOLE_BIN_DIR are not readonly here because in some functions (checkout),
+# they might get set again when the installer is sourced. This causes an
+# error due to modifying a readonly variable.
+setupVars="/etc/pihole/setupVars.conf"
+PI_HOLE_BIN_DIR="/usr/local/bin"
+
+readonly colfile="${PI_HOLE_SCRIPT_DIR}/COL_TABLE"
+source "${colfile}"
+
+utilsfile="${PI_HOLE_SCRIPT_DIR}/utils.sh"
+source "${utilsfile}"
+
+webpageFunc() {
+  source "${PI_HOLE_SCRIPT_DIR}/webpage.sh"
+  main "$@"
+  exit 0
+}
+
+listFunc() {
+  "${PI_HOLE_SCRIPT_DIR}"/list.sh "$@"
+  exit 0
+}
+
+debugFunc() {
+    local automated
+    local web
+    local check_database_integrity
+    # Pull off the `debug` leaving passed call augmentation flags in $1
+    shift
+
+    for value in "$@"; do
+        [[ "$value"  == *"-a"* ]] && automated="true"
+        [[ "$value"  == *"-w"* ]] && web="true"
+        [[ "$value"  == *"-c"* ]] && check_database_integrity="true"
+        [[ "$value" == *"--check_database"* ]] && check_database_integrity="true"
+    done
+
+  AUTOMATED=${automated:-} WEBCALL=${web:-} CHECK_DATABASE=${check_database_integrity:-} "${PI_HOLE_SCRIPT_DIR}"/piholeDebug.sh
+  exit 0
+}
+
+flushFunc() {
+  "${PI_HOLE_SCRIPT_DIR}"/piholeLogFlush.sh "$@"
+  exit 0
+}
+
+arpFunc() {
+  "${PI_HOLE_SCRIPT_DIR}"/piholeARPTable.sh "$@"
+  exit 0
+}
+
+updatePiholeFunc() {
+  shift
+  "${PI_HOLE_SCRIPT_DIR}"/update.sh "$@"
+  exit 0
+}
+
+reconfigurePiholeFunc() {
+  /etc/.pihole/automated\ install/basic-install.sh --reconfigure
+  exit 0;
+}
+
+updateGravityFunc() {
+  exec "${PI_HOLE_SCRIPT_DIR}"/gravity.sh "$@"
+}
+
+queryFunc() {
+  shift
+  "${PI_HOLE_SCRIPT_DIR}"/query.sh "$@"
+  exit 0
+}
+
+chronometerFunc() {
+  shift
+  "${PI_HOLE_SCRIPT_DIR}"/chronometer.sh "$@"
+  exit 0
+}
+
+
+uninstallFunc() {
+  "${PI_HOLE_SCRIPT_DIR}"/uninstall.sh
+  exit 0
+}
+
+versionFunc() {
+  shift
+  exec "${PI_HOLE_SCRIPT_DIR}"/version.sh "$@"
+}
+
+restartDNS() {
+  local svcOption svc str output status pid icon FTL_PID_FILE
+  svcOption="${1:-restart}"
+
+  # get the current path to the pihole-FTL.pid
+  FTL_PID_FILE="$(getFTLPIDFile)"
+
+  # Determine if we should reload or restart
+  if [[ "${svcOption}" =~ "reload-lists" ]]; then
+    # Reloading of the lists has been requested
+    # Note 1: This will NOT re-read any *.conf files
+    # Note 2: We cannot use killall here as it does
+    #         not know about real-time signals
+
+    pid="$(getFTLPID ${FTL_PID_FILE})"
+    if [[ "$pid" -eq "-1" ]]; then
+      svc="true"
+      str="FTL is not running"
+      icon="${INFO}"
+    else
+      svc="kill -RTMIN ${pid}"
+      str="Reloading DNS lists"
+      icon="${TICK}"
+    fi
+  elif [[ "${svcOption}" =~ "reload" ]]; then
+    # Reloading of the DNS cache has been requested
+    # Note: This will NOT re-read any *.conf files
+    pid="$(getFTLPID ${FTL_PID_FILE})"
+    if [[ "$pid" -eq "-1" ]]; then
+      svc="true"
+      str="FTL is not running"
+      icon="${INFO}"
+    else
+      svc="kill -HUP ${pid}"
+      str="Flushing DNS cache"
+      icon="${TICK}"
+    fi
+  else
+    # A full restart has been requested
+    svc="service pihole-FTL restart"
+    str="Restarting DNS server"
+    icon="${TICK}"
+  fi
+
+  # Print output to Terminal, but not to Web Admin
+  [[ -t 1 ]] && echo -ne "  ${INFO} ${str}..."
+
+  output=$( { ${svc}; } 2>&1 )
+  status="$?"
+
+  if [[ "${status}" -eq 0 ]]; then
+    [[ -t 1 ]] && echo -e "${OVER}  ${icon} ${str}"
+    return 0
+  else
+    [[ ! -t 1 ]] && local OVER=""
+    echo -e "${OVER}  ${CROSS} ${output}"
+    return 1
+  fi
+}
+
+piholeEnable() {
+  if [[ "${2}" == "-h" ]] || [[ "${2}" == "--help" ]]; then
+    echo "Usage: pihole disable [time]
+Example: 'pihole disable', or 'pihole disable 5m'
+Disable Pi-hole subsystems
+
+Time:
+  #s                  Disable Pi-hole functionality for # second(s)
+  #m                  Disable Pi-hole functionality for # minute(s)"
+    exit 0
+
+  elif [[ "${1}" == "0" ]]; then
+    # Disable Pi-hole
+    if grep -cq "BLOCKING_ENABLED=false" "${setupVars}"; then
+      echo -e "  ${INFO} Blocking already disabled, nothing to do"
+      exit 0
+    fi
+    if [[ $# > 1 ]]; then
+      local error=false
+      if [[ "${2}" == *"s" ]]; then
+        tt=${2%"s"}
+        if [[ "${tt}" =~ ^-?[0-9]+$ ]];then
+          local str="Disabling blocking for ${tt} seconds"
+          echo -e "  ${INFO} ${str}..."
+          local str="Blocking will be re-enabled in ${tt} seconds"
+          nohup "${PI_HOLE_SCRIPT_DIR}"/pihole-reenable.sh ${tt} </dev/null &>/dev/null &
+        else
+          local error=true
+        fi
+      elif [[ "${2}" == *"m" ]]; then
+        tt=${2%"m"}
+          if [[ "${tt}" =~ ^-?[0-9]+$ ]];then
+          local str="Disabling blocking for ${tt} minutes"
+          echo -e "  ${INFO} ${str}..."
+          local str="Blocking will be re-enabled in ${tt} minutes"
+          tt=$((${tt}*60))
+          nohup "${PI_HOLE_SCRIPT_DIR}"/pihole-reenable.sh ${tt} </dev/null &>/dev/null &
+        else
+          local error=true
+        fi
+      elif [[ -n "${2}" ]]; then
+        local error=true
+      else
+        echo -e "  ${INFO} Disabling blocking"
+      fi
+
+      if [[ ${error} == true ]];then
+        echo -e "  ${COL_LIGHT_RED}Unknown format for delayed reactivation of the blocking!${COL_NC}"
+        echo -e "  Try 'pihole disable --help' for more information."
+        exit 1
+      fi
+
+      local str="Pi-hole Disabled"
+      addOrEditKeyValPair "${setupVars}" "BLOCKING_ENABLED" "false"
+    fi
+  else
+    # Enable Pi-hole
+    killall -q pihole-reenable
+    if grep -cq "BLOCKING_ENABLED=true" "${setupVars}"; then
+      echo -e "  ${INFO} Blocking already enabled, nothing to do"
+      exit 0
+    fi
+    echo -e "  ${INFO} Enabling blocking"
+    local str="Pi-hole Enabled"
+
+    addOrEditKeyValPair "${setupVars}" "BLOCKING_ENABLED" "true"
+  fi
+
+  restartDNS reload-lists
+
+  echo -e "${OVER}  ${TICK} ${str}"
+}
+
+piholeLogging() {
+  shift
+  if [[ "${1}" == "-h" ]] || [[ "${1}" == "--help" ]]; then
+    echo "Usage: pihole logging [options]
+Example: 'pihole logging on'
+Specify whether the Pi-hole log should be used
+
+Options:
+  on                  Enable the Pi-hole log at /var/log/pihole/pihole.log
+  off                 Disable and flush the Pi-hole log at /var/log/pihole/pihole.log
+  off noflush         Disable the Pi-hole log at /var/log/pihole/pihole.log"
+    exit 0
+  elif [[ "${1}" == "off" ]]; then
+    # Disable logging
+    removeKey /etc/dnsmasq.d/01-pihole.conf "log-queries"
+    addOrEditKeyValPair "${setupVars}" "QUERY_LOGGING" "false"
+    if [[ "${2}" != "noflush" ]]; then
+      # Flush logs
+      "${PI_HOLE_BIN_DIR}"/pihole -f
+    fi
+    echo -e "  ${INFO} Disabling logging..."
+    local str="Logging has been disabled!"
+  elif [[ "${1}" == "on" ]]; then
+    # Enable logging
+    addKey /etc/dnsmasq.d/01-pihole.conf "log-queries"
+    addOrEditKeyValPair "${setupVars}" "QUERY_LOGGING" "true"
+    echo -e "  ${INFO} Enabling logging..."
+    local str="Logging has been enabled!"
+  else
+    echo -e "  ${COL_LIGHT_RED}Invalid option${COL_NC}
+  Try 'pihole logging --help' for more information."
+    exit 1
+  fi
+  restartDNS
+  echo -e "${OVER}  ${TICK} ${str}"
+}
+
+analyze_ports() {
+  local lv4 lv6 port=${1}
+  # FTL is listening at least on at least one port when this
+  # function is getting called
+  # Check individual address family/protocol combinations
+  # For a healthy Pi-hole, they should all be up (nothing printed)
+  lv4="$(ss --ipv4 --listening --numeric --tcp --udp src :${port})"
+  if grep -q "udp " <<< "${lv4}"; then
+      echo -e "     ${TICK} UDP (IPv4)"
+  else
+      echo -e "     ${CROSS} UDP (IPv4)"
+  fi
+  if grep -q "tcp " <<< "${lv4}"; then
+      echo -e "     ${TICK} TCP (IPv4)"
+  else
+      echo -e "     ${CROSS} TCP (IPv4)"
+  fi
+  lv6="$(ss --ipv6 --listening --numeric --tcp --udp src :${port})"
+  if grep -q "udp " <<< "${lv6}"; then
+      echo -e "     ${TICK} UDP (IPv6)"
+  else
+      echo -e "     ${CROSS} UDP (IPv6)"
+  fi
+  if grep -q "tcp " <<< "${lv6}"; then
+      echo -e "     ${TICK} TCP (IPv6)"
+  else
+      echo -e "     ${CROSS} TCP (IPv6)"
+  fi
+  echo ""
+}
+
+statusFunc() {
+    # Determine if there is pihole-FTL service is listening
+    local pid port ftl_api_port ftl_pid_file
+
+    ftl_pid_file="$(getFTLPIDFile)"
+
+    pid="$(getFTLPID ${ftl_pid_file})"
+
+    ftl_api_port="$(getFTLAPIPort)"
+    if [[ "$pid" -eq "-1" ]]; then
+        case "${1}" in
+            "web") echo "-1";;
+            *) echo -e "  ${CROSS} DNS service is NOT running";;
+        esac
+        return 0
+    else
+        #get the DNS port pihole-FTL is listening on by using FTL's telnet API
+        port="$(echo ">dns-port >quit" | nc 127.0.0.1 "$ftl_api_port")"
+        if [[ "${port}" == "0" ]]; then
+            case "${1}" in
+                "web") echo "-1";;
+                *) echo -e "  ${CROSS} DNS service is NOT listening";;
+            esac
+            return 0
+        else
+            if [[ "${1}" != "web" ]]; then
+                echo -e "  ${TICK} FTL is listening on port ${port}"
+                analyze_ports "${port}"
+            fi
+        fi
+    fi
+
+  # Determine if Pi-hole's blocking is enabled
+  if grep -q "BLOCKING_ENABLED=false" /etc/pihole/setupVars.conf; then
+    # A config is commented out
+    case "${1}" in
+      "web") echo 0;;
+      *) echo -e "  ${CROSS} Pi-hole blocking is disabled";;
+    esac
+  elif grep -q "BLOCKING_ENABLED=true" /etc/pihole/setupVars.conf;  then
+    # Configs are set
+    case "${1}" in
+      "web") echo "$port";;
+      *) echo -e "  ${TICK} Pi-hole blocking is enabled";;
+    esac
+  else
+    # No configs were found
+    case "${1}" in
+      "web") echo -2;;
+      *) echo -e "  ${INFO} Pi-hole blocking will be enabled";;
+    esac
+    # Enable blocking
+    "${PI_HOLE_BIN_DIR}"/pihole enable
+  fi
+exit 0
+}
+
+tailFunc() {
+  # Warn user if Pi-hole's logging is disabled
+  local logging_enabled=$(grep -c "^log-queries" /etc/dnsmasq.d/01-pihole.conf)
+  if [[ "${logging_enabled}" == "0" ]]; then
+    # No "log-queries" lines are found.
+    # Commented out lines (such as "#log-queries") are ignored
+    echo "  ${CROSS} Warning: Query logging is disabled"
+  fi
+  echo -e "  ${INFO} Press Ctrl-C to exit"
+
+  # Strip date from each line
+  # Color blocklist/blacklist/wildcard entries as red
+  # Color A/AAAA/DHCP strings as white
+  # Color everything else as gray
+  tail -f /var/log/pihole/pihole.log | grep --line-buffered "${1}" | sed -E \
+    -e "s,($(date +'%b %d ')| dnsmasq\[[0-9]*\]),,g" \
+    -e "s,(.*(blacklisted |gravity blocked ).*),${COL_RED}&${COL_NC}," \
+    -e "s,.*(query\\[A|DHCP).*,${COL_NC}&${COL_NC}," \
+    -e "s,.*,${COL_GRAY}&${COL_NC},"
+  exit 0
+}
+
+piholeCheckoutFunc() {
+  if [[ "$2" == "-h" ]] || [[ "$2" == "--help" ]]; then
+    echo "Usage: pihole checkout [repo] [branch]
+Example: 'pihole checkout master' or 'pihole checkout core dev'
+Switch Pi-hole subsystems to a different GitHub branch
+
+Repositories:
+  core [branch]       Change the branch of Pi-hole's core subsystem
+  web [branch]        Change the branch of Web Interface subsystem
+  ftl [branch]        Change the branch of Pi-hole's FTL subsystem
+
+Branches:
+  master              Update subsystems to the latest stable release
+  dev                 Update subsystems to the latest development release
+  branchname          Update subsystems to the specified branchname"
+    exit 0
+  fi
+
+  source "${PI_HOLE_SCRIPT_DIR}"/piholeCheckout.sh
+  shift
+  checkout "$@"
+}
+
+tricorderFunc() {
+  local tricorder_token
+  if [[ ! -p "/dev/stdin" ]]; then
+    echo -e "  ${INFO} Please do not call Tricorder directly"
+    exit 1
+  fi
+
+  tricorder_token=$(curl --silent --fail --show-error --upload-file "-" https://tricorder.pi-hole.net/upload < /dev/stdin 2>&1)
+  if [[ "${tricorder_token}" != "https://tricorder.pi-hole.net/"* ]]; then
+      echo -e "${CROSS} uploading failed, contact Pi-hole support for assistance."
+      # Log curl error (if available)
+      if [ -n "${tricorder_token}" ]; then
+          echo -e "${INFO} Error message: ${COL_RED}${tricorder_token}${COL_NC}\\n"
+          tricorder_token=""
+      fi
+      exit 1
+  fi
+  echo "Upload successful, your token is: ${COL_GREEN}${tricorder_token}${COL_NC}"
+  exit 0
+}
+
+updateCheckFunc() {
+  "${PI_HOLE_SCRIPT_DIR}"/updatecheck.sh "$@"
+  exit 0
+}
+
+helpFunc() {
+  echo "Usage: pihole [options]
+Example: 'pihole -w -h'
+Add '-h' after specific commands for more information on usage
+
+Whitelist/Blacklist Options:
+  -w, whitelist       Whitelist domain(s)
+  -b, blacklist       Blacklist domain(s)
+  --regex, regex      Regex blacklist domains(s)
+  --white-regex       Regex whitelist domains(s)
+  --wild, wildcard    Wildcard blacklist domain(s)
+  --white-wild        Wildcard whitelist domain(s)
+                        Add '-h' for more info on whitelist/blacklist usage
+
+Debugging Options:
+  -d, debug           Start a debugging session
+                        Add '-c' or '--check-database' to include a Pi-hole database integrity check
+                        Add '-a' to automatically upload the log to tricorder.pi-hole.net
+  -f, flush           Flush the Pi-hole log
+  -r, reconfigure     Reconfigure or Repair Pi-hole subsystems
+  -t, tail [arg]      View the live output of the Pi-hole log.
+                      Add an optional argument to filter the log
+                      (regular expressions are supported)
+
+
+Options:
+  -a, admin           Web interface options
+                        Add '-h' for more info on Web Interface usage
+  -c, chronometer     Calculates stats and displays to an LCD
+                        Add '-h' for more info on chronometer usage
+  -g, updateGravity   Update the list of ad-serving domains
+  -h, --help, help    Show this help dialog
+  -l, logging         Specify whether the Pi-hole log should be used
+                        Add '-h' for more info on logging usage
+  -q, query           Query the adlists for a specified domain
+                        Add '-h' for more info on query usage
+  -up, updatePihole   Update Pi-hole subsystems
+                        Add '--check-only' to exit script before update is performed.
+  -v, version         Show installed versions of Pi-hole, Web Interface & FTL
+                        Add '-h' for more info on version usage
+  uninstall           Uninstall Pi-hole from your system
+  status              Display the running status of Pi-hole subsystems
+  enable              Enable Pi-hole subsystems
+  disable             Disable Pi-hole subsystems
+                        Add '-h' for more info on disable usage
+  restartdns          Full restart Pi-hole subsystems
+                        Add 'reload' to update the lists and flush the cache without restarting the DNS server
+                        Add 'reload-lists' to only update the lists WITHOUT flushing the cache or restarting the DNS server
+  checkout            Switch Pi-hole subsystems to a different GitHub branch
+                        Add '-h' for more info on checkout usage
+  arpflush            Flush information stored in Pi-hole's network tables";
+  exit 0
+}
+
+if [[ $# = 0 ]]; then
+  helpFunc
+fi
+
+# functions that do not require sudo power
+case "${1}" in
+  "-h" | "help" | "--help"      ) helpFunc;;
+  "-v" | "version"              ) versionFunc "$@";;
+  "-c" | "chronometer"          ) chronometerFunc "$@";;
+  "-q" | "query"                ) queryFunc "$@";;
+  "status"                      ) statusFunc "$2";;
+
+  "tricorder"                   ) tricorderFunc;;
+
+  # we need to add all arguments that require sudo power to not trigger the * argument
+  "-w" | "whitelist"            ) ;;
+  "-b" | "blacklist"            ) ;;
+  "--wild" | "wildcard"         ) ;;
+  "--regex" | "regex"           ) ;;
+  "--white-regex" | "white-regex" ) ;;
+  "--white-wild" | "white-wild"   ) ;;
+  "-f" | "flush"                ) ;;
+  "-up" | "updatePihole"        ) ;;
+  "-r"  | "reconfigure"         ) ;;
+  "-g" | "updateGravity"        ) ;;
+  "-l" | "logging"              ) ;;
+  "uninstall"                   ) ;;
+  "enable"                      ) ;;
+  "disable"                     ) ;;
+  "-d" | "debug"                ) ;;
+  "restartdns"                  ) ;;
+  "-a" | "admin"                ) ;;
+  "checkout"                    ) ;;
+  "updatechecker"               ) ;;
+  "arpflush"                    ) ;;
+  "-t" | "tail"                 ) ;;
+  *                             ) helpFunc;;
+esac
+
+# Must be root to use this tool
+if [[ ! $EUID -eq 0 ]];then
+  if [[ -x "$(command -v sudo)" ]]; then
+    exec sudo bash "$0" "$@"
+    exit $?
+  else
+    echo -e "  ${CROSS} sudo is needed to run pihole commands.  Please run this script as root or install sudo."
+    exit 1
+  fi
+fi
+
+# Handle redirecting to specific functions based on arguments
+case "${1}" in
+  "-w" | "whitelist"            ) listFunc "$@";;
+  "-b" | "blacklist"            ) listFunc "$@";;
+  "--wild" | "wildcard"         ) listFunc "$@";;
+  "--regex" | "regex"           ) listFunc "$@";;
+  "--white-regex" | "white-regex" ) listFunc "$@";;
+  "--white-wild" | "white-wild"   ) listFunc "$@";;
+  "-d" | "debug"                ) debugFunc "$@";;
+  "-f" | "flush"                ) flushFunc "$@";;
+  "-up" | "updatePihole"        ) updatePiholeFunc "$@";;
+  "-r"  | "reconfigure"         ) reconfigurePiholeFunc;;
+  "-g" | "updateGravity"        ) updateGravityFunc "$@";;
+  "-l" | "logging"              ) piholeLogging "$@";;
+  "uninstall"                   ) uninstallFunc;;
+  "enable"                      ) piholeEnable 1;;
+  "disable"                     ) piholeEnable 0 "$2";;
+  "restartdns"                  ) restartDNS "$2";;
+  "-a" | "admin"                ) webpageFunc "$@";;
+  "checkout"                    ) piholeCheckoutFunc "$@";;
+  "updatechecker"               ) updateCheckFunc "$@";;
+  "arpflush"                    ) arpFunc "$@";;
+  "-t" | "tail"                 ) tailFunc "$2";;
+esac
