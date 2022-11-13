@@ -17,6 +17,6 @@ jobs:
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag samuel19982/securepihole:latest
     - name: Login to registry
-      run: docker login -u $USER -p $PASSWORD
+      run: docker login -u ${{secrets.USER}} -p ${{secrets.PASSWORD}}
     - name: Push the Docker image
       run: docker push samuel19982/securepihole:latest
