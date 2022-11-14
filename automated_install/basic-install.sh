@@ -1085,6 +1085,9 @@ version_check_dnsmasq() {
         printf "%b  %b No dnsmasq.conf found... restoring default dnsmasq.conf...\\n" "${OVER}"  "${TICK}"
     fi
 
+    # Removing not working conf file
+    rm ${dnsmasq_conf}
+
     printf "  %b Installing %s..." "${INFO}" "${dnsmasq_pihole_01_target}"
     # Check to see if dnsmasq directory exists (it may not due to being a fresh install and dnsmasq no longer being a dependency)
     if [[ ! -d "/etc/dnsmasq.d"  ]];then

@@ -26,7 +26,8 @@ detect_arch() {
 esac
 }
 
-DOCKER_TAG=$(cat /pihole.docker.tag)
+DOCKER_TAG="2022.10"
+
 # Helps to have some additional tools in the dev image when debugging
 if [[ "${DOCKER_TAG}" = 'nightly' ||  "${DOCKER_TAG}" = 'dev' ]]; then
   apt-get update

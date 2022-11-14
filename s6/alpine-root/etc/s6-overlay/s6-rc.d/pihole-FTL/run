@@ -1,4 +1,6 @@
 #!/command/with-contenv bash
+# Remove bad dnsmasq
+rm /etc/dnsmasq.conf
 
 if [ "${PH_VERBOSE:-0}" -gt 0 ] ; then
     set -x ;

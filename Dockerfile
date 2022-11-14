@@ -1,15 +1,15 @@
-FROM alpine:3.15
+FROM alpine:3.16
 
 ENV WEBPASSWORD=changeme
 
 RUN echo http://dl-2.alpinelinux.org/alpine/edge/community/ >> /etc/apk/repositories
 
 RUN apk --no-cache update && apk upgrade \
-        && apk --no-cache add bash git openrc libcap curl shadow libcap busybox-initscripts \
+        && apk --no-cache add bash git openrc libcap curl shadow libcap busybox-initscripts dnsmasq \
         && mkdir -p /run/openrc \
         && touch /run/openrc/softlevel \
-    && (delgroup www-data || true) \
-    && adduser -D -H -u 1000 -s /bin/bash www-data
+        && (delgroup www-data || true) \
+        && adduser -D -H -u 1000 -s /bin/bash www-data
 
 COPY s6/alpine-root /
 COPY s6/service /usr/local/bin/service
@@ -47,3 +47,6 @@ ENV DNSMASQ_USER pihole
 ENV PATH /opt/pihole:${PATH}
 HEALTHCHECK CMD dig +short +norecurse +retry=0 @127.0.0.1 pi.hole || exit 1
 SHELL ["/bin/bash", "-c"]
+
+RUN sudo /etc/init.d/dnsmasq stop
+RUN pihole restartdns
