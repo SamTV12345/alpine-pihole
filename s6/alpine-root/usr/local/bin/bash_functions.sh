@@ -495,7 +495,7 @@ setup_var_exists() {
     if [ -n "$2" ]; then
         local REQUIRED_VALUE="[^\n]+"
     fi
-    if grep -Pq "^${KEY}=${REQUIRED_VALUE}" "$setupVars"; then
+    if grep -Eq "^${KEY}=${REQUIRED_VALUE}" "$setupVars"; then
         echo "  [i] Pre existing ${KEY} found"
         true
     else

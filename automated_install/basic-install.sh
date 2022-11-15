@@ -395,7 +395,6 @@ get_available_interfaces() {
 
 # A function for displaying the dialogs the user sees when first running the installer
 welcomeDialogs() {
-    echo $useUpdateVars
     # Display the welcome dialog using an appropriately sized window via the calculation conducted earlier in the script
     dialog --no-shadow --clear --keep-tite \
         --backtitle "Welcome" \
@@ -1085,9 +1084,6 @@ version_check_dnsmasq() {
         printf "%b  %b No dnsmasq.conf found... restoring default dnsmasq.conf...\\n" "${OVER}"  "${TICK}"
     fi
 
-    # Removing not working conf file
-    rm ${dnsmasq_conf}
-
     printf "  %b Installing %s..." "${INFO}" "${dnsmasq_pihole_01_target}"
     # Check to see if dnsmasq directory exists (it may not due to being a fresh install and dnsmasq no longer being a dependency)
     if [[ ! -d "/etc/dnsmasq.d"  ]];then
@@ -1236,12 +1232,10 @@ installConfigs() {
             install -d -m 755 -o "${USER}" -g root /etc/lighttpd
         # Otherwise, if the config file already exists
         elif [[ -f "${lighttpdConfig}" ]]; then
-            echo "backing up original config..."
             # back up the original
             mv "${lighttpdConfig}"{,.orig}
         fi
         # and copy in the config file Pi-hole needs
-        echo "Copying in Lighttpd configfile"
         install -D -m 644 ${PI_HOLE_LOCAL_REPO}/advanced/${LIGHTTPD_CFG} "${lighttpdConfig}"
         # In some cases, the php binary ends in 8 or not, modify the config file accordingly
         if ls /usr/bin | grep -q php-cgi8; then
@@ -1916,7 +1910,7 @@ FTLinstall() {
 
         # Install the new version with the correct permissions
 	curl -sSL "$(get_download_url)" > pihole-FTL
-        install -m 0777 pihole-FTL /usr/bin/pihole-FTL
+        install -m 0755 pihole-FTL /usr/bin/pihole-FTL
 
         # Move back into the original directory the user was in
         popd > /dev/null || { printf "Unable to return to original directory after FTL binary download.\\n"; return 1; }
@@ -2215,14 +2209,8 @@ main() {
     printf "  %b Checking for / installing Required dependencies for this install script...\\n" "${INFO}"
     install_dependent_packages "${INSTALLER_DEPS[@]}"
 
-    echo "Running in outside "$runUnattended
-    echo "Running in outside "$setupVars
-    # shellcheck disable=SC2046
-    test -f ${setupVars} && echo "File exists"
-    test -f ${setupVars} || echo "File doesnt exists but needs to be there to setup"
     # If the setup variable file exists,
     if [[ -f "${setupVars}" ]]; then
-      echo "Running in "$runUnattended
         # if it's running unattended,
         if [[ "${runUnattended}" == true ]]; then
             printf "  %b Performing unattended setup, no dialogs will be displayed\\n" "${INFO}"
@@ -2378,7 +2366,6 @@ main() {
     # devfs service is not running.
     # See https://gitlab.com/yvelon/pi-hole/-/issues/2
     # Start it
-    rc-status -a
     rc-update add devfs sysinit
     if ! rc-service devfs status > /dev/null 2>&1; then
         rc-service devfs start

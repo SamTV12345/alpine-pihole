@@ -46,4 +46,3 @@ ENV DNSMASQ_USER pihole
 
 ENV PATH /opt/pihole:${PATH}
 HEALTHCHECK CMD dig +short +norecurse +retry=0 @127.0.0.1 pi.hole || exit 1
-SHELL ["/bin/bash", "-c"]
