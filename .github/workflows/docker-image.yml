@@ -15,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag samuel19982/securepihole:latest
+      run: docker build . --file Dockerfile_ubuntu --tag samuel19982/securepihole:latest
     - name: Login to registry
       run: docker login -u ${{secrets.USER}} -p ${{secrets.PASSWORD}}
     - name: Push the Docker image
