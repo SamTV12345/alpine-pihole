@@ -1,9 +1,15 @@
 FROM ubuntu:latest as gitdownloader
 
-RUN apt update -y && apt upgrade -y && apt install git -y
+RUN apt update -y && apt install git -y
 
 RUN git clone https://github.com/pi-hole/docker-pi-hole.git /docker-pihole
 
+WORKDIR /docker-pihole
+
+RUN git fetch --tags
+RUN git describe --tags `git rev-list --tags --max-count=1`>/version.txt
+
+RUN git checkout $(cat version.txt)
 
 
 ARG PIHOLE_BASE
@@ -20,7 +26,7 @@ RUN apt update -y && apt upgrade -y && apt install php curl -y
 
 
 ARG PIHOLE_DOCKER_TAG
-RUN echo "${PIHOLE_DOCKER_TAG}" > /pihole.docker.tag
+COPY --from=gitdownloader /version.txt /pihole.docker.tag
 
 
 ENTRYPOINT [ "/s6-init" ]
