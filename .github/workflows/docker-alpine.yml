@@ -1,16 +1,16 @@
-name: Docker Image Debian
+name: Docker Image Alpine
 
 on: [workflow_dispatch]
 
 
 jobs:
-  build-debian:
+  build-alpine:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Build the Docker image
-        run: docker build . --file Dockerfile_debian --tag samuel19982/securepihole:debian
+        run: docker build . --file Dockerfile --tag samuel19982/securepihole:alpine
       - name: Login to registry
         run: docker login -u ${{secrets.USER}} -p ${{secrets.PASSWORD}}
       - name: Push the Docker image
-        run: docker push samuel19982/securepihole:debian
+        run: docker push samuel19982/securepihole:alpine
