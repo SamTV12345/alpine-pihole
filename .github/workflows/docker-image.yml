@@ -1,17 +1,12 @@
 name: Docker Image CI
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+on: [workflow_dispatch]
+
 
 jobs:
 
-  build:
-
+  build-ubuntu:
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
     - name: Build the Docker image
@@ -20,3 +15,23 @@ jobs:
       run: docker login -u ${{secrets.USER}} -p ${{secrets.PASSWORD}}
     - name: Push the Docker image
       run: docker push samuel19982/securepihole:ubuntu
+  build-debian:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build the Docker image
+        run: docker build . --file Dockerfile_debian --tag samuel19982/securepihole:debian
+      - name: Login to registry
+        run: docker login -u ${{secrets.USER}} -p ${{secrets.PASSWORD}}
+      - name: Push the Docker image
+        run: docker push samuel19982/securepihole:debian
+  build-alpine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build the Docker image
+        run: docker build . --file Dockerfile --tag samuel19982/securepihole:alpine
+      - name: Login to registry
+        run: docker login -u ${{secrets.USER}} -p ${{secrets.PASSWORD}}
+      - name: Push the Docker image
+        run: docker push samuel19982/securepihole:alpine
