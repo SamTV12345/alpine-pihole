@@ -1,15 +1,16 @@
 FROM ubuntu:latest as gitdownloader
 
-RUN apt update -y && apt install git -y
+RUN apt update -y && apt install git curl jq -y
 
 RUN git clone https://github.com/pi-hole/docker-pi-hole.git /docker-pihole
 
 WORKDIR /docker-pihole
 
-RUN git fetch --tags
-RUN git describe --tags `git rev-list --tags --max-count=1`>/version.txt
+RUN git fetch --all --tags
 
-RUN git checkout $(cat version.txt)
+RUN  curl 'https://api.github.com/repos/pi-hole/docker-pi-hole/releases/latest' -s | jq .name -r>/version.txt
+
+RUN git checkout tags/$(cat /version.txt)
 
 
 ARG PIHOLE_BASE
