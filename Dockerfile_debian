@@ -11,6 +11,8 @@ RUN git describe --tags `git rev-list --tags --max-count=1`>/version.txt
 
 RUN git checkout $(cat version.txt)
 
+RUN echo "CHECKING out: "
+RUN cat /version.txt
 
 ARG PIHOLE_BASE
 FROM debian:unstable-slim
