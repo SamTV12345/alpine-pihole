@@ -1,4 +1,4 @@
-FROM debian:unstable-slim as gitdownloader
+FROM debian:stable as gitdownloader
 
 RUN apt update -y && apt install git -y
 
@@ -15,7 +15,7 @@ RUN echo "CHECKING out: "
 RUN cat /version.txt
 
 ARG PIHOLE_BASE
-FROM debian:unstable-slim
+FROM debian:stable
 
 ENV TZ=Europe/Berlin
 ENV WEBPASSWORD=changeme
