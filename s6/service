@@ -51,3 +51,5 @@ if [[ ! -d "/run/service/$service" ]] ; then
 fi;
 
 ${command} "${service}"
+
+chmod 777 /run/lighttpd

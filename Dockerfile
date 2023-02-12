@@ -24,6 +24,7 @@ COPY automated_install /etc/pihole/automated_install
 
 RUN bash /etc/pihole/automated_install/docker-setup.sh
 
+
 # php config start passes special ENVs into
 ARG PHP_ENV_CONFIG
 ENV PHP_ENV_CONFIG /etc/lighttpd/conf-enabled/15-fastcgi-php.conf
