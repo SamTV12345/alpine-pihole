@@ -203,7 +203,7 @@ if is_command apk ; then
     INSTALLER_DEPS=(dialog git newt procps dhcpcd openrc ncurses newt git)
     PIHOLE_DEPS=(curl bind-tools nmap-ncat psmisc sudo unzip wget libidn nettle libcap openresolv iproute2-ss jq)
     UNBOUND_DEPS=(unbound)
-    PIHOLE_WEB_DEPS=(lighttpd lighttpd-mod_auth fcgi php8 php8-cgi php8-sqlite3 php8-session php8-openssl php8-json php8-fileinfo php8-phar php8-intl)
+    PIHOLE_WEB_DEPS=(lighttpd lighttpd-mod_auth fcgi php php-cgi php-sqlite3 php-session php-openssl php-json php-fileinfo php-phar php-intl)
     LIGHTTPD_USER="lighttpd"
     LIGHTTPD_GROUP="lighttpd"
     LIGHTTPD_CFG="lighttpd.conf.alpine"
@@ -1224,38 +1224,50 @@ installConfigs() {
     # Install pihole-FTL.service
     install -m 0755 "${PI_HOLE_LOCAL_REPO}/advanced/Templates/pihole-FTL.service" "/etc/init.d/pihole-FTL"
 
-    # If the user chose to install the dashboard,
+ # If the user chose to install the dashboard,
     if [[ "${INSTALL_WEB_SERVER}" == true ]]; then
-        # and if the Web server conf directory does not exist,
-        if [[ ! -d "/etc/lighttpd" ]]; then
-            # make it and set the owners
-            install -d -m 755 -o "${USER}" -g root /etc/lighttpd
-        # Otherwise, if the config file already exists
-        elif [[ -f "${lighttpdConfig}" ]]; then
-            # back up the original
-            mv "${lighttpdConfig}"{,.orig}
-        fi
-        # and copy in the config file Pi-hole needs
-        install -D -m 644 ${PI_HOLE_LOCAL_REPO}/advanced/${LIGHTTPD_CFG} "${lighttpdConfig}"
-        # In some cases, the php binary ends in 8 or not, modify the config file accordingly
-        if ls /usr/bin | grep -q php-cgi8; then
-            sed -i 's|/usr/bin/php-cgi|/usr/bin/php-cgi8|g'  "${lighttpdConfig}"
-        fi
-        # Make sure the external.conf file exists, as lighttpd v1.4.50 crashes without it
-        if [ ! -f /etc/lighttpd/external.conf ]; then
-            install -m 644 /dev/null /etc/lighttpd/external.conf
-        fi
-        # If there is a custom block page in the html/pihole directory, replace 404 handler in lighttpd config
-        if [[ -f "${PI_HOLE_404_DIR}/custom.php" ]]; then
-            sed -i 's/^\(server\.error-handler-404\s*=\s*\).*$/\1"\/pihole\/custom\.php"/' "${lighttpdConfig}"
-        fi
-        # Make the directories if they do not exist and set the owners
+        # set permissions on /etc/lighttpd/lighttpd.conf so pihole user (other) can read the file
+        chmod o+x /etc/lighttpd
+        chmod o+r "${lighttpdConfig}"
+
+        # Ensure /run/lighttpd exists and is owned by lighttpd user
+        # Needed for the php socket
         mkdir -p /run/lighttpd
         chown ${LIGHTTPD_USER}:${LIGHTTPD_GROUP} /run/lighttpd
-        mkdir -p /var/cache/lighttpd/compress
-        chown ${LIGHTTPD_USER}:${LIGHTTPD_GROUP} /var/cache/lighttpd/compress
-        mkdir -p /var/cache/lighttpd/uploads
-        chown ${LIGHTTPD_USER}:${LIGHTTPD_GROUP} /var/cache/lighttpd/uploads
+
+        if grep -q -F "FILE AUTOMATICALLY OVERWRITTEN BY PI-HOLE" "${lighttpdConfig}"; then
+            # Attempt to preserve backwards compatibility with older versions
+            install -D -m 644 ${PI_HOLE_LOCAL_REPO}/advanced/${LIGHTTPD_CFG} "${lighttpdConfig}"
+            # Make the directories if they do not exist and set the owners
+            mkdir -p /var/cache/lighttpd/compress
+            chown ${LIGHTTPD_USER}:${LIGHTTPD_GROUP} /var/cache/lighttpd/compress
+            mkdir -p /var/cache/lighttpd/uploads
+            chown ${LIGHTTPD_USER}:${LIGHTTPD_GROUP} /var/cache/lighttpd/uploads
+        fi
+        # Copy the config file to include for pihole admin interface
+        mkdir -p /etc/lighttpd/conf.d
+        if [[ -d "/etc/lighttpd/conf.d" ]]; then
+            install -D -m 644 ${PI_HOLE_LOCAL_REPO}/advanced/pihole-admin.conf /etc/lighttpd/conf.d/pihole-admin.conf
+            if grep -q -F 'include "/etc/lighttpd/conf.d/pihole-admin.conf"' "${lighttpdConfig}"; then
+                :
+            else
+                echo 'include "/etc/lighttpd/conf.d/pihole-admin.conf"' >> "${lighttpdConfig}"
+            fi
+            # Avoid some warnings trace from lighttpd, which might break tests
+            conf=/etc/lighttpd/conf.d/pihole-admin.conf
+            if lighttpd -f "${lighttpdConfig}" -tt 2>&1 | grep -q -F "WARNING: unknown config-key: dir-listing\."; then
+                echo '# Avoid some warnings trace from lighttpd, which might break tests' >> $conf
+                echo 'server.modules += ( "mod_dirlisting" )' >> $conf
+            fi
+            if lighttpd -f "${lighttpdConfig}" -tt 2>&1 | grep -q -F "warning: please use server.use-ipv6"; then
+                echo '# Avoid some warnings trace from lighttpd, which might break tests' >> $conf
+                echo 'server.use-ipv6 := "disable"' >> $conf
+            fi
+        else
+            # lighttpd config include dir not found
+            printf "  %b Warning: lighttpd config include dir not found\\n" "${INFO}"
+            printf "      Please manually install pihole-admin.conf\\n"
+        fi
     fi
 }
 
