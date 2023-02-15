@@ -15,6 +15,7 @@ RUN apk --no-cache update && apk upgrade \
 
 COPY s6/alpine-root /
 COPY s6/service /usr/local/bin/service
+COPY version/versions /etc/pihole/versions
 
 ENTRYPOINT [ "/s6-init" ]
 
