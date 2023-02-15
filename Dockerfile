@@ -1,18 +1,21 @@
-FROM alpine:3.16
+FROM alpine:edge
 
+
+RUN cat /etc/apk/repositories
 ENV WEBPASSWORD=changeme
 
-RUN echo http://dl-2.alpinelinux.org/alpine/edge/community/ >> /etc/apk/repositories
+
+RUN cat /etc/apk/repositories
+
 
 RUN apk --no-cache update && apk upgrade \
-        && apk --no-cache add bash git openrc libcap curl shadow libcap busybox-initscripts dnsmasq \
+        && apk --no-cache add bash git openrc libcap curl shadow libcap busybox-openrc busybox-mdev-openrc busybox-extras-openrc dnsmasq \
         && mkdir -p /run/openrc \
-        && touch /run/openrc/softlevel \
-        && (delgroup www-data || true) \
-        && adduser -D -H -u 1000 -s /bin/bash www-data
+        && touch /run/openrc/softlevel
 
 COPY s6/alpine-root /
 COPY s6/service /usr/local/bin/service
+COPY version/versions /etc/pihole/versions
 
 ENTRYPOINT [ "/s6-init" ]
 
