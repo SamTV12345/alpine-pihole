@@ -755,7 +755,7 @@ RemoveCustomCNAMERecord() {
     if [[ -n "${validDomain}" ]]; then
         validTarget="$(checkDomain "${target}")"
         if [[ -n "${validTarget}" ]]; then
-            sed -i "/cname=${validDomain},${validTarget}$/Id" "${dnscustomcnamefile}"
+            sed -i "/cname=${validDomain},${validTarget}$/d" "${dnscustomcnamefile}"
         else
             echo "  ${CROSS} Invalid Target Passed!"
             exit 1
