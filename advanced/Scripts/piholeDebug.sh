@@ -981,6 +981,20 @@ ftl_full_status(){
     fi
 }
 
+lighttpd_test_configuration(){
+    # let lighttpd test it's own configuration
+    local lighttpd_conf_test
+    echo_current_diagnostic "Lighttpd configuration test"
+    lighttpd_conf_test=$(lighttpd -tt -f /etc/lighttpd/lighttpd.conf)
+    if [ -z "${lighttpd_conf_test}" ]; then
+        # empty output
+        log_write "${TICK} ${COL_GREEN}No error in lighttpd configuration${COL_NC}"
+    else
+        log_write "${CROSS} ${COL_RED}Error in lighttpd configuration${COL_NC}"
+        log_write "   ${lighttpd_conf_test}"
+    fi
+}
+
 make_array_from_file() {
     local filename="${1}"
     # The second argument can put a limit on how many line should be read from the file
@@ -1073,10 +1087,13 @@ dir_check() {
         # check if exists first; if it does,
         if ls "${filename}" 1> /dev/null 2>&1; then
             # do nothing
-            :
+            true
+            return
         else
             # Otherwise, show an error
             log_write "${COL_RED}${directory} does not exist.${COL_NC}"
+            false
+            return
         fi
     done
 }
@@ -1084,6 +1101,19 @@ dir_check() {
 list_files_in_dir() {
     # Set the first argument passed to this function as a named variable for better readability
     local dir_to_parse="${1}"
+
+    # show files and sizes of some directories, don't print the file content (yet)
+    if [[ "${dir_to_parse}" == "${SHM_DIRECTORY}" ]]; then
+        # SHM file - we do not want to see the content, but we want to see the files and their sizes
+        log_write "$(ls -lh "${dir_to_parse}/")"
+    elif [[ "${dir_to_parse}" == "${WEB_SERVER_CONFIG_DIRECTORY_FEDORA}" ]]; then
+        # we want to see all files files in /etc/lighttpd/conf.d
+        log_write "$(ls -lh "${dir_to_parse}/" 2> /dev/null )"
+    elif [[ "${dir_to_parse}" == "${WEB_SERVER_CONFIG_DIRECTORY_DEBIAN}" ]]; then
+        # we want to see all files files in /etc/lighttpd/conf.d
+        log_write "$(ls -lh "${dir_to_parse}/"/ 2> /dev/null )"
+    fi
+
     # Store the files found in an array
     mapfile -t files_found < <(ls "${dir_to_parse}")
     # For each file in the array,
@@ -1099,11 +1129,8 @@ list_files_in_dir() {
             [[ "${dir_to_parse}/${each_file}" == "${PIHOLE_WEB_SERVER_ACCESS_LOG_FILE}" ]] || \
             [[ "${dir_to_parse}/${each_file}" == "${PIHOLE_LOG_GZIPS}" ]]; then
             :
-        elif [[ "${dir_to_parse}" == "${SHM_DIRECTORY}" ]]; then
-            # SHM file - we do not want to see the content, but we want to see the files and their sizes
-            log_write "$(ls -lhd "${dir_to_parse}"/"${each_file}")"
         elif [[ "${dir_to_parse}" == "${DNSMASQ_D_DIRECTORY}" ]]; then
-            # in case of the dnsmasq directory inlcuede all files in the debug output
+            # in case of the dnsmasq directory include all files in the debug output
             log_write "\\n${COL_GREEN}$(ls -lhd "${dir_to_parse}"/"${each_file}")${COL_NC}"
             make_array_from_file "${dir_to_parse}/${each_file}"
         else
@@ -1136,9 +1163,10 @@ show_content_of_files_in_dir() {
     # Set a local variable for better readability
     local directory="${1}"
     # Check if the directory exists
-    dir_check "${directory}"
-    # if it does, list the files in it
-    list_files_in_dir "${directory}"
+    if dir_check "${directory}"; then
+        # if it does, list the files in it
+        list_files_in_dir "${directory}"
+    fi
 }
 
 show_content_of_pihole_files() {
@@ -1553,6 +1581,7 @@ check_name_resolution
 check_dhcp_servers
 process_status
 ftl_full_status
+lighttpd_test_configuration
 parse_setup_vars
 check_x_headers
 analyze_ftl_db
