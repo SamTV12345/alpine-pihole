@@ -1143,7 +1143,7 @@ get_download_url() {
     local arch=$(uname -m)
     case "$arch" in
         x86_64)
-	    download_url="https://gitlab.com/yvelon/pihole-FTL-alpine/-/package_files/66813105/download";;
+	    download_url="https://gitlab.com/yvelon/pihole-FTL-alpine/-/package_files/74540495/download";;
         i686)
 	    download_url="https://gitlab.com/yvelon/pihole-FTL-alpine/-/package_files/66813117/download";;
         armv7l)
