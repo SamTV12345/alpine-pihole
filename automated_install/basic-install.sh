@@ -1143,13 +1143,13 @@ get_download_url() {
     local arch=$(uname -m)
     case "$arch" in
         x86_64)
-	    download_url="https://gitlab.com/yvelon/pihole-FTL-alpine/-/package_files/74540495/download";;
+	    download_url="https://gitlab.com/yvelon/pihole-FTL-alpine/-/package_files/74561754/download";;
         i686)
-	    download_url="https://gitlab.com/yvelon/pihole-FTL-alpine/-/package_files/66813117/download";;
+	    download_url="https://gitlab.com/yvelon/pihole-FTL-alpine/-/package_files/74562678/download";;
         armv7l)
-	    download_url="https://gitlab.com/yvelon/pihole-FTL-alpine/-/package_files/66813971/download";;
+	    download_url="https://gitlab.com/yvelon/pihole-FTL-alpine/-/package_files/74568093/download";;
 	aarch64)
-	    download_url="https://gitlab.com/yvelon/pihole-FTL-alpine/-/package_files/66813449/download";;
+	    download_url="https://gitlab.com/yvelon/pihole-FTL-alpine/-/package_files/74571705/download";;
         *)
             download_url="";;
    esac
