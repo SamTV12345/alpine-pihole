@@ -1857,17 +1857,10 @@ clone_or_update_repos() {
     # Otherwise, a repair is happening
     else
         # so get git files for Core
-        if ldd /bin/ls | grep -q "ld-musl-i386"; then
-            getGitFiles ${PI_HOLE_LOCAL_REPO} ${piholeGitUrl} || \
-            { printf "  %b Unable to clone %s into %s, unable to continue%b\\n" "${COL_LIGHT_RED}" "${piholeGitUrl}" "${PI_HOLE_LOCAL_REPO}" "${COL_NC}"; \
-            exit 1; \
-            }
-        else
-            getGitFiles ${PI_HOLE_LOCAL_REPO} ${piholeGitUrl} || \
-            { printf "  %b Unable to clone %s into %s, unable to continue%b\\n" "${COL_LIGHT_RED}" "${piholeGitUrl}" "${PI_HOLE_LOCAL_REPO}" "${COL_NC}"; \
-            exit 1; \
-            }
-        fi
+        getGitFiles ${PI_HOLE_LOCAL_REPO} ${piholeGitUrl} || \
+        { printf "  %b Unable to clone %s into %s, unable to continue%b\\n" "${COL_LIGHT_RED}" "${piholeGitUrl}" "${PI_HOLE_LOCAL_REPO}" "${COL_NC}"; \
+        exit 1; \
+        }
         # If the Web interface was installed,
         if [[ "${INSTALL_WEB_INTERFACE}" == true ]]; then
             # get the Web git files
