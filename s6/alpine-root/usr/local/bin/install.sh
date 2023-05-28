@@ -37,7 +37,7 @@ fi
 
 detect_arch
 
-S6_OVERLAY_VERSION=v3.1.1.2
+S6_OVERLAY_VERSION=v3.1.5.0
 
 curl -L -s "https://github.com/just-containers/s6-overlay/releases/download/${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" | tar Jxpf - -C /
 curl -L -s "https://github.com/just-containers/s6-overlay/releases/download/${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" | tar Jxpf - -C /
