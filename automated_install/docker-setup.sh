@@ -36,7 +36,7 @@ if [[ "${DOCKER_TAG}" = 'nightly' ||  "${DOCKER_TAG}" = 'dev' ]]; then
 fi
 
 detect_arch
-S6_OVERLAY_VERSION=v3.1.1.2
+S6_OVERLAY_VERSION=v3.1.5.0
 
 echo "https://github.com/just-containers/s6-overlay/releases/download/${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz"
 curl -L -s "https://github.com/just-containers/s6-overlay/releases/download/${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" | tar Jxpf - -C /
@@ -60,7 +60,7 @@ source $setupVars
 
 export USER=pihole
 
-export S6_OVERLAY_VERSION=v3.1.1.2
+export S6_OVERLAY_VERSION=v3.1.5.0
 
 export PIHOLE_SKIP_OS_CHECK=true
 
